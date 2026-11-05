@@ -85,6 +85,9 @@ pub struct PlatformSpecificWindowAttributes {
     /// compositor has no such global.
     #[cfg(wayland_platform)]
     pub halo_header_overlay: bool,
+    /// Wayland-only: mark the window modal to its parent (`xdg_wm_dialog_v1`).
+    #[cfg(wayland_platform)]
+    pub wayland_modal: bool,
     #[cfg(x11_platform)]
     pub x11: X11WindowAttributes,
 }
@@ -112,6 +115,8 @@ impl Default for PlatformSpecificWindowAttributes {
             wayland_parent: None,
             #[cfg(wayland_platform)]
             halo_header_overlay: false,
+            #[cfg(wayland_platform)]
+            wayland_modal: false,
             #[cfg(x11_platform)]
             x11: X11WindowAttributes {
                 visual_id: None,

@@ -46,6 +46,7 @@ use crate::platform_impl::wayland::types::wayland_dnd::{DndSessionState, Wayland
 use crate::platform_impl::wayland::types::wp_fractional_scaling::FractionalScalingManager;
 use crate::platform_impl::wayland::types::wp_viewporter::ViewporterState;
 use crate::platform_impl::wayland::types::xdg_activation::XdgActivationState;
+use crate::platform_impl::wayland::types::xdg_dialog::XdgDialogManager;
 use crate::platform_impl::wayland::types::xdg_foreign::XdgForeign;
 use crate::platform_impl::wayland::types::xdg_popup::{
     plan_destroy_tree, release_dismissed, subtree_leaf_first, DismissedPopup, PopupEvent, PopupId,
@@ -161,6 +162,9 @@ pub struct WinitState {
     /// to the requesting application's window).
     pub xdg_foreign: Option<XdgForeign>,
 
+    /// Marks windows modal to their parent.
+    pub xdg_dialog: Option<XdgDialogManager>,
+
     /// COSMIC tooltip manager.
     pub tooltip_manager: Option<CosmicTooltipManager>,
 
@@ -270,6 +274,7 @@ impl WinitState {
             backdrop_color_manager: CosmicBackdropColorManager::new(globals, queue_handle).ok(),
             surface_embed_manager: CosmicSurfaceEmbedManager::new(globals, queue_handle).ok(),
             xdg_foreign: XdgForeign::new(globals, queue_handle).ok(),
+            xdg_dialog: XdgDialogManager::new(globals, queue_handle).ok(),
             tooltip_manager: CosmicTooltipManager::new(globals, queue_handle).ok(),
             halo_header_manager: KoraHaloHeaderManager::new(globals, queue_handle).ok(),
             identity_manager: IdentityManager::new(globals, queue_handle).ok(),

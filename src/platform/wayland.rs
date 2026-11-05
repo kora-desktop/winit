@@ -944,6 +944,11 @@ pub trait WindowAttributesExtWayland {
     /// commit, which is the only time the protocol accepts it. No-op if the compositor lacks
     /// the global; [`WindowExtWayland::is_halo_header_overlay`] tells which.
     fn with_halo_header_overlay(self, overlay: bool) -> Self;
+
+    /// Mark this window modal to its parent, set with [`Self::with_wayland_parent`] or by
+    /// the app: the compositor keeps the parent's focus and input on this window until it
+    /// closes (`xdg_wm_dialog_v1`). No-op if the compositor lacks the global.
+    fn with_wayland_modal(self, modal: bool) -> Self;
 }
 
 impl WindowAttributesExtWayland for WindowAttributes {
@@ -963,6 +968,12 @@ impl WindowAttributesExtWayland for WindowAttributes {
     #[inline]
     fn with_halo_header_overlay(mut self, overlay: bool) -> Self {
         self.platform_specific.halo_header_overlay = overlay;
+        self
+    }
+
+    #[inline]
+    fn with_wayland_modal(mut self, modal: bool) -> Self {
+        self.platform_specific.wayland_modal = modal;
         self
     }
 }
