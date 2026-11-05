@@ -108,6 +108,9 @@ jobs:
            # Newer releases that do not build on 1.70 although their metadata allows it.
            cargo update -p foreign-types-macros --precise 0.2.3
            cargo update -p orbclient --precise 0.3.47
+           # tracing-web 0.1.4 needs wasm-bindgen 0.2.130 (Rust 1.81); 0.1.3 keeps 0.2.105.
+           cargo update -p tracing-web --precise 0.1.3
+           cargo update -p wasm-bindgen --precise 0.2.105
 
     - name: Install GCC Multilib
       if: (matrix.platform.os == 'ubuntu-latest') && contains(matrix.platform.target, 'i686')
