@@ -193,12 +193,26 @@ impl Window {
         if let Some(handle) = attributes.platform_specific.wayland_parent.as_deref() {
             match state.xdg_foreign.as_ref() {
                 Some(xdg_foreign) => {
-                    let imported = xdg_foreign.import_parent(handle, &surface, &queue_handle);
+                    let imported = xdg_foreign.import_parent(
+                        handle,
+                        &surface,
+                        super::make_wid(&surface),
+                        &queue_handle,
+                    );
                     window_state.set_imported_parent(imported);
                 },
                 None => warn!(
                     "xdg-foreign unsupported by the compositor; cannot parent window to {handle}"
                 ),
+            }
+        }
+
+        if attributes.platform_specific.wayland_modal {
+            match state.xdg_dialog.as_ref() {
+                Some(xdg_dialog) => {
+                    window_state.set_dialog(xdg_dialog.modal(window.xdg_toplevel(), &queue_handle))
+                },
+                None => warn!("xdg-dialog unsupported by the compositor; the window is not modal"),
             }
         }
 

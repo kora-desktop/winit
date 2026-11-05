@@ -22,6 +22,7 @@ use sctk::reexports::protocols::xdg::foreign::zv2::client::zxdg_importer_v2::Zxd
 use tracing::warn;
 
 use crate::platform_impl::wayland::state::WinitState;
+use crate::platform_impl::wayland::WindowId;
 
 /// State shared with an imported toplevel handle.
 #[derive(Debug)]
@@ -29,6 +30,8 @@ pub struct ImportedData {
     /// Whether the import is still valid. The compositor sends `destroyed`
     /// when the exported toplevel goes away or the handle was never valid.
     pub valid: bool,
+    /// The window parented by this import.
+    pub window_id: WindowId,
 }
 
 /// Wrapper around the `zxdg_importer_v2` global.
@@ -56,9 +59,10 @@ impl XdgForeign {
         &self,
         handle: &str,
         surface: &WlSurface,
+        window_id: WindowId,
         queue_handle: &QueueHandle<WinitState>,
     ) -> ImportedToplevel {
-        let data = Arc::new(Mutex::new(ImportedData { valid: true }));
+        let data = Arc::new(Mutex::new(ImportedData { valid: true, window_id }));
         let imported =
             self.importer.import_toplevel(handle.to_string(), queue_handle, data.clone());
         imported.set_parent_of(surface);
@@ -109,7 +113,7 @@ impl Dispatch<ZxdgImporterV2, GlobalData, WinitState> for XdgForeign {
 
 impl Dispatch<ZxdgImportedV2, Arc<Mutex<ImportedData>>, WinitState> for XdgForeign {
     fn event(
-        _state: &mut WinitState,
+        state: &mut WinitState,
         _proxy: &ZxdgImportedV2,
         event: <ZxdgImportedV2 as Proxy>::Event,
         data: &Arc<Mutex<ImportedData>>,
@@ -118,7 +122,12 @@ impl Dispatch<ZxdgImportedV2, Arc<Mutex<ImportedData>>, WinitState> for XdgForei
     ) {
         if let zxdg_imported_v2::Event::Destroyed = event {
             warn!("xdg-foreign: imported parent handle was invalidated by the compositor");
-            data.lock().unwrap().valid = false;
+            let mut data = data.lock().unwrap();
+            // A dialog outlives no parent: it is asked to close, as by the compositor.
+            if data.valid {
+                WinitState::queue_close(&mut state.window_compositor_updates, data.window_id);
+            }
+            data.valid = false;
         }
     }
 }

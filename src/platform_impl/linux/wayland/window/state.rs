@@ -59,6 +59,7 @@ use crate::platform_impl::wayland::types::cosmic_surface_embed::{
 use crate::platform_impl::wayland::types::cursor::{CustomCursor, SelectedCursor};
 use crate::platform_impl::wayland::types::kwin_blur::KWinBlurManager;
 use crate::platform_impl::wayland::types::wayland_dnd::{SharedDndOfferState, WaylandDndManager};
+use crate::platform_impl::wayland::types::xdg_dialog::XdgDialog;
 use crate::platform_impl::wayland::types::xdg_foreign::ImportedToplevel;
 use crate::platform_impl::{PlatformCustomCursor, WindowId};
 use crate::window::{CursorGrabMode, CursorIcon, ImePurpose, ResizeDirection, Theme};
@@ -232,6 +233,9 @@ pub struct WindowState {
     /// relationship in the compositor.
     xdg_imported_parent: Option<ImportedToplevel>,
 
+    /// The window's modal hint, kept for its lifetime.
+    xdg_dialog: Option<XdgDialog>,
+
     /// Wayland DnD manager (cloned from WinitState).
     dnd_manager: Option<WaylandDndManager>,
     /// Per-seat data devices for DnD (cloned from WinitState).
@@ -315,6 +319,7 @@ impl WindowState {
             embedded_surfaces: std::collections::HashMap::new(),
             next_embed_id: 1,
             xdg_imported_parent: None,
+            xdg_dialog: None,
             dnd_manager: winit_state.dnd_manager.clone(),
             dnd_data_devices: winit_state.dnd_data_devices.clone(),
             dnd_shared_offer: winit_state.dnd_session.shared_offer.clone(),
@@ -2158,6 +2163,11 @@ impl WindowState {
     /// toplevel, keeping it alive for the window's lifetime.
     pub fn set_imported_parent(&mut self, imported: ImportedToplevel) {
         self.xdg_imported_parent = Some(imported);
+    }
+
+    /// Keep the window's dialog hints for its lifetime.
+    pub fn set_dialog(&mut self, dialog: XdgDialog) {
+        self.xdg_dialog = Some(dialog);
     }
 
     /// Register text input on the top-level.
