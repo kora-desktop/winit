@@ -7,7 +7,7 @@ use std::time::Duration;
 use tracing::warn;
 
 use sctk::reexports::client::delegate_dispatch;
-use sctk::reexports::client::protocol::wl_pointer::WlPointer;
+use sctk::reexports::client::protocol::wl_pointer::{AxisSource, WlPointer};
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{Connection, Proxy, QueueHandle, Dispatch};
@@ -23,7 +23,7 @@ use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use sctk::compositor::SurfaceData;
 use sctk::globals::GlobalData;
 use sctk::seat::pointer::{
-    PointerData, PointerDataExt, PointerEvent, PointerEventKind, PointerHandler,
+    AxisScroll, PointerData, PointerDataExt, PointerEvent, PointerEventKind, PointerHandler,
 };
 use sctk::seat::SeatState;
 
@@ -228,11 +228,14 @@ impl PointerHandler for WinitState {
                         window_id,
                     );
                 },
-                PointerEventKind::Axis { horizontal, vertical, .. } => {
+                PointerEventKind::Axis { horizontal, vertical, source, .. } => {
                     // Get the current phase.
                     let mut pointer_data = pointer.winit_data().inner.lock().unwrap();
 
-                    let has_discrete_scroll = horizontal.discrete != 0 || vertical.discrete != 0;
+                    let is_wheel =
+                        matches!(source, Some(AxisSource::Wheel | AxisSource::WheelTilt))
+                            || horizontal.discrete != 0
+                            || vertical.discrete != 0;
 
                     // Figure out what to do about start/ended phases here.
                     //
@@ -242,8 +245,8 @@ impl PointerHandler for WinitState {
                         TouchPhase::Ended
                     } else {
                         match pointer_data.phase {
-                            // Discrete scroll only results in moved events.
-                            _ if has_discrete_scroll => TouchPhase::Moved,
+                            // Wheel scroll only results in moved events.
+                            _ if is_wheel => TouchPhase::Moved,
                             TouchPhase::Started | TouchPhase::Moved => TouchPhase::Moved,
                             _ => TouchPhase::Started,
                         }
@@ -252,21 +255,7 @@ impl PointerHandler for WinitState {
                     // Update the phase.
                     pointer_data.phase = phase;
 
-                    // Mice events have both pixel and discrete delta's at the same time. So prefer
-                    // the discrete values if they are present.
-                    let delta = if has_discrete_scroll {
-                        // NOTE: Wayland sign convention is the inverse of winit.
-                        MouseScrollDelta::LineDelta(
-                            (-horizontal.discrete) as f32,
-                            (-vertical.discrete) as f32,
-                        )
-                    } else {
-                        // NOTE: Wayland sign convention is the inverse of winit.
-                        MouseScrollDelta::PixelDelta(
-                            LogicalPosition::new(-horizontal.absolute, -vertical.absolute)
-                                .to_physical(scale_factor),
-                        )
-                    };
+                    let delta = scroll_delta(&horizontal, &vertical, source, scale_factor);
 
                     self.events_sink.push_window_event(
                         WindowEvent::MouseWheel { device_id, delta, phase },
@@ -275,6 +264,47 @@ impl PointerHandler for WinitState {
                 },
             }
         }
+    }
+}
+
+/// The `wl_pointer.axis` distance of one classic wheel notch: libinput's 15 degree click
+/// angle, which compositors pass through as the pixel value.
+const WHEEL_NOTCH_PIXELS: f64 = 15.0;
+
+/// Turns one pointer frame's scroll into winit's delta.
+///
+/// Before `wl_seat` version 8 a high-resolution wheel reaches us as small `axis` values, with an
+/// `axis_discrete` only on the frame where they add up to a notch. Reading a wheel's lines from
+/// `axis` keeps every frame a line delta, so a smooth-scrolling client eases them all alike
+/// instead of jumping by pixels between notches. Touchpads stay pixel deltas.
+fn scroll_delta(
+    horizontal: &AxisScroll,
+    vertical: &AxisScroll,
+    source: Option<AxisSource>,
+    scale_factor: f64,
+) -> MouseScrollDelta {
+    let lines = |axis: &AxisScroll| {
+        if axis.absolute != 0.0 {
+            axis.absolute / WHEEL_NOTCH_PIXELS
+        } else {
+            f64::from(axis.discrete)
+        }
+    };
+
+    // NOTE: Wayland sign convention is the inverse of winit.
+    match source {
+        Some(AxisSource::Wheel | AxisSource::WheelTilt) => {
+            MouseScrollDelta::LineDelta(-lines(horizontal) as f32, -lines(vertical) as f32)
+        },
+        // Without a source, mice events have both pixel and discrete deltas at the same time,
+        // so prefer the discrete values if they are present.
+        _ if horizontal.discrete != 0 || vertical.discrete != 0 => {
+            MouseScrollDelta::LineDelta((-horizontal.discrete) as f32, (-vertical.discrete) as f32)
+        },
+        _ => MouseScrollDelta::PixelDelta(
+            LogicalPosition::new(-horizontal.absolute, -vertical.absolute)
+                .to_physical(scale_factor),
+        ),
     }
 }
 
@@ -559,3 +589,83 @@ delegate_dispatch!(WinitState: [ WpCursorShapeDeviceV1: GlobalData] => SeatState
 delegate_dispatch!(WinitState: [ZwpPointerConstraintsV1: GlobalData] => PointerConstraintsState);
 delegate_dispatch!(WinitState: [ZwpLockedPointerV1: GlobalData] => PointerConstraintsState);
 delegate_dispatch!(WinitState: [ZwpConfinedPointerV1: GlobalData] => PointerConstraintsState);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One `wl_pointer` frame's scroll as SCTK merges it: vertical `axis`, `axis_discrete`, and
+    /// `axis_source`.
+    fn frame(absolute: f64, discrete: i32, source: AxisSource) -> MouseScrollDelta {
+        let vertical = AxisScroll { absolute, discrete, stop: false };
+        scroll_delta(&AxisScroll::default(), &vertical, Some(source), 1.5)
+    }
+
+    fn lines(delta: MouseScrollDelta) -> f32 {
+        let MouseScrollDelta::LineDelta(x, y) = delta else {
+            panic!("expected a line delta, got {delta:?}");
+        };
+        assert_eq!(x, 0.0);
+        y
+    }
+
+    // What a `wl_seat` v7 client gets from cosmic-comp (smithay) for one notch down.
+
+    #[test]
+    fn a_classic_wheel_notch_is_one_line() {
+        // libinput: value120 120, 15 px; smithay sends `axis_discrete` 1 with it.
+        assert_eq!(lines(frame(15.0, 1, AxisSource::Wheel)), -1.0);
+    }
+
+    #[test]
+    fn a_high_resolution_notch_is_eight_eighth_lines() {
+        // libinput: value120 15 eight times, 1.875 px each; smithay sends `axis_discrete` 1
+        // only once the eighth adds up to 120.
+        let notch: Vec<f32> =
+            (1..=8).map(|i| lines(frame(1.875, i32::from(i == 8), AxisSource::Wheel))).collect();
+
+        assert_eq!(notch, [-0.125; 8]);
+    }
+
+    #[test]
+    fn a_tilted_wheel_is_lines() {
+        let horizontal = AxisScroll { absolute: 15.0, discrete: 1, stop: false };
+        let delta =
+            scroll_delta(&horizontal, &AxisScroll::default(), Some(AxisSource::WheelTilt), 1.0);
+
+        assert_eq!(delta, MouseScrollDelta::LineDelta(-1.0, 0.0));
+    }
+
+    #[test]
+    fn a_reduced_scroll_speed_scales_the_lines() {
+        // cosmic-comp scales value120 and the pixels by its scroll factor, here 0.5, so
+        // `axis_discrete` only comes every second notch.
+        let deltas: Vec<f32> = [(7.5, 0), (7.5, 1)]
+            .map(|(absolute, discrete)| lines(frame(absolute, discrete, AxisSource::Wheel)))
+            .to_vec();
+
+        assert_eq!(deltas, [-0.5, -0.5]);
+    }
+
+    #[test]
+    fn a_touchpad_stays_physical_pixels() {
+        let swipe: Vec<MouseScrollDelta> =
+            [3.2, 5.0, 4.0].map(|absolute| frame(absolute, 0, AxisSource::Finger)).to_vec();
+
+        assert_eq!(swipe, [3.2, 5.0, 4.0].map(|y: f64| pixels(-y * 1.5)).to_vec());
+    }
+
+    #[test]
+    fn a_frame_without_a_source_keeps_preferring_discrete() {
+        let notch = AxisScroll { absolute: 15.0, discrete: 1, stop: false };
+        let nudge = AxisScroll { absolute: 2.0, discrete: 0, stop: false };
+        let none = AxisScroll::default();
+
+        assert_eq!(scroll_delta(&none, &notch, None, 1.0), MouseScrollDelta::LineDelta(0.0, -1.0));
+        assert_eq!(scroll_delta(&none, &nudge, None, 1.0), pixels(-2.0));
+    }
+
+    fn pixels(y: f64) -> MouseScrollDelta {
+        MouseScrollDelta::PixelDelta(PhysicalPosition::new(-0.0, y))
+    }
+}
