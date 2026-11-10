@@ -1937,29 +1937,19 @@ impl WindowState {
         }
         source.set_actions(wl_actions);
 
-        // Create the icon surface for the drag visual.
-        // If the caller provided custom ARGB pixels, use those; otherwise
-        // fall back to a generic 48×48 semi-transparent rounded rectangle.
-        let icon = {
+        // The caller's icon, if any; without one the compositor shows only the pointer.
+        let icon = icon_pixels.and_then(|(w, h, pixels, scale)| {
             let mut pool = self.custom_cursor_pool.lock().unwrap();
-            if let Some((w, h, pixels, scale)) = icon_pixels {
-                crate::platform_impl::wayland::types::wayland_dnd::create_dnd_icon_from_pixels(
-                    &self.compositor,
-                    &mut pool,
-                    &self.queue_handle,
-                    w,
-                    h,
-                    &pixels,
-                    scale,
-                )
-            } else {
-                crate::platform_impl::wayland::types::wayland_dnd::create_dnd_icon_surface(
-                    &self.compositor,
-                    &mut pool,
-                    &self.queue_handle,
-                )
-            }
-        };
+            crate::platform_impl::wayland::types::wayland_dnd::create_dnd_icon_from_pixels(
+                &self.compositor,
+                &mut pool,
+                &self.queue_handle,
+                w,
+                h,
+                &pixels,
+                scale,
+            )
+        });
         let icon_surface_ref = icon.as_ref().map(|(s, _)| s);
         let had_icon = icon_surface_ref.is_some();
 

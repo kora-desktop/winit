@@ -151,65 +151,6 @@ impl WaylandDndManager {
     }
 }
 
-/// Create a small icon surface for drag visuals using SHM.
-///
-/// Returns a `WlSurface` backed by a 48×48 semi-transparent buffer that
-/// can be passed as the icon to `wl_data_device.start_drag(…)`.
-///
-/// **Both** the surface and the buffer must be kept alive for the duration
-/// of the drag — dropping the buffer would let the `SlotPool` reclaim its
-/// backing memory.
-pub fn create_dnd_icon_surface(
-    compositor: &sctk::compositor::CompositorState,
-    pool: &mut sctk::shm::slot::SlotPool,
-    queue_handle: &QueueHandle<WinitState>,
-) -> Option<(WlSurface, sctk::shm::slot::Buffer)> {
-    let surface = compositor.create_surface(queue_handle);
-    let (buffer, canvas) = pool
-        .create_buffer(48, 48, 48 * 4, wayland_client::protocol::wl_shm::Format::Argb8888)
-        .ok()?;
-
-    // Draw a semi-transparent rounded rectangle icon.
-    let (w, h) = (48i32, 48i32);
-    let radius = 8i32;
-    for y in 0..h {
-        for x in 0..w {
-            let offset = (y * w + x) as usize * 4;
-            // Simple rounded-rect check.
-            let inside = {
-                let (cx, cy) = match (x < radius, y < radius, x >= w - radius, y >= h - radius) {
-                    (true, true, ..) => (radius, radius),
-                    (_, true, true, _) => (w - radius - 1, radius),
-                    (true, _, _, true) => (radius, h - radius - 1),
-                    (_, _, true, true) => (w - radius - 1, h - radius - 1),
-                    _ => (x, y), // Inside, not in a corner.
-                };
-                let dx = x - cx;
-                let dy = y - cy;
-                dx * dx + dy * dy <= radius * radius
-            };
-            if inside {
-                // ARGB: semi-transparent white.
-                canvas[offset] = 0xff; // B
-                canvas[offset + 1] = 0xff; // G
-                canvas[offset + 2] = 0xff; // R
-                canvas[offset + 3] = 0xb0; // A
-            } else {
-                canvas[offset] = 0;
-                canvas[offset + 1] = 0;
-                canvas[offset + 2] = 0;
-                canvas[offset + 3] = 0;
-            }
-        }
-    }
-
-    surface.attach(Some(buffer.wl_buffer()), 0, 0);
-    surface.damage_buffer(0, 0, w, h);
-    surface.commit();
-
-    Some((surface, buffer))
-}
-
 /// Create an icon surface from caller-provided ARGB pixel data.
 ///
 /// `pixels` must be exactly `width * height * 4` bytes in pre-multiplied

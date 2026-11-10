@@ -482,7 +482,7 @@ pub trait WindowExtWayland {
     /// `icon` is optional pre-rendered icon pixel data as
     /// `(width, height, argb_pixels, buffer_scale)` in pre-multiplied ARGB format.
     /// The `buffer_scale` is used for HiDPI support (set to 2 for 2x rendering).
-    /// If `None`, a default generic icon is used.
+    /// If `None`, the drag has no icon and the compositor shows only the pointer.
     ///
     /// Returns `(true, mime_types, data)` if the drag was started, or
     /// `(false, mime_types, data)` if it could not be started (e.g. not
