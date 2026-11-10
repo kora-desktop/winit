@@ -59,3 +59,5 @@ changelog entry.
 - On Wayland, keep one drag-and-drop data device and one text input per seat when a
   mouse or keyboard is unplugged and plugged back in, and cancel the touches still down
   when the touchscreen goes away.
+- On Wayland, a drag started without an icon no longer shows a solid white square: it
+  has no icon, as `wl_data_device.start_drag` allows.
