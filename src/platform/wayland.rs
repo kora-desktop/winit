@@ -26,7 +26,7 @@ pub use crate::window::Theme;
 // Re-export popup types for the public API
 #[cfg(wayland_platform)]
 pub use crate::platform_impl::wayland::types::xdg_popup::{
-    PopupAnchor, PopupEvent, PopupGravity, PopupId, PopupSettings,
+    PopupAnchor, PopupBlurStyle, PopupEvent, PopupGravity, PopupId, PopupSettings,
 };
 
 /// Additional methods on [`ActiveEventLoop`] that are specific to Wayland.
