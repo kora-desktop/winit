@@ -1071,6 +1071,7 @@ impl ActiveEventLoop {
         // compositor to stop.
         popup_state.background_effect = background_effect;
         popup_state.blur = kwin_blur;
+        popup_state.blur_style = settings.blur_style;
         popup_state.shadow = shadow;
         popup_state.corner_radius = corner_radius;
         popup_state.parent_popup = parent_popup;

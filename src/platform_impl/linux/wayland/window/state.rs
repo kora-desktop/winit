@@ -31,7 +31,6 @@ use sctk::shell::WaylandSurface;
 use sctk::shm::slot::SlotPool;
 use sctk::shm::Shm;
 use sctk::subcompositor::SubcompositorState;
-use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 
 use crate::cursor::CustomCursor as RootCustomCursor;
 use crate::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Size};
@@ -57,7 +56,7 @@ use crate::platform_impl::wayland::types::cosmic_surface_embed::{
     CosmicSurfaceEmbedManager, EmbeddedSurface,
 };
 use crate::platform_impl::wayland::types::cursor::{CustomCursor, SelectedCursor};
-use crate::platform_impl::wayland::types::kwin_blur::KWinBlurManager;
+use crate::platform_impl::wayland::types::kwin_blur::{KWinBlurManager, OrgKdeKwinBlur};
 use crate::platform_impl::wayland::types::wayland_dnd::{SharedDndOfferState, WaylandDndManager};
 use crate::platform_impl::wayland::types::xdg_dialog::XdgDialog;
 use crate::platform_impl::wayland::types::xdg_foreign::ImportedToplevel;

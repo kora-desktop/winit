@@ -9,13 +9,13 @@ use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use sctk::shell::xdg::popup::Popup;
 use sctk::shell::xdg::{XdgPositioner, XdgShell};
 use wayland_protocols::xdg::shell::client::xdg_positioner;
-use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 
 use crate::dpi::LogicalSize;
 use crate::event::WindowEvent;
 use crate::platform_impl::wayland::types::background_effect::BackgroundEffect;
 use crate::platform_impl::wayland::types::cosmic_corner_radius::CornerRadiusController;
 use crate::platform_impl::wayland::types::cosmic_tooltip::TooltipHandle;
+use crate::platform_impl::wayland::types::kwin_blur::OrgKdeKwinBlur;
 use crate::platform_impl::wayland::types::layer_shadow::ShadowController;
 use crate::platform_impl::wayland::WindowId;
 use crate::window::WindowId as PublicWindowId;
@@ -118,6 +118,20 @@ impl From<u32> for PopupGravity {
     }
 }
 
+/// How the compositor draws a popup's blur, in the units of CSS `backdrop-filter`. A value left
+/// `None` keeps the compositor's default for it.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PopupBlurStyle {
+    /// Blur radius, in logical pixels.
+    pub radius: Option<f32>,
+    /// Saturation of the blurred backdrop: `1.0` leaves it as it is.
+    pub saturation: Option<f32>,
+    /// Strength of the white frosted tint over the backdrop: `0.0` for none.
+    pub tint: Option<f32>,
+    /// Alpha of the 1 px light border around the backdrop: `0.0` for none.
+    pub border: Option<f32>,
+}
+
 /// Settings for creating a popup surface.
 #[derive(Debug, Clone)]
 pub struct PopupSettings {
@@ -145,6 +159,9 @@ pub struct PopupSettings {
     /// through. The blurred area is the card: the window geometry, or the
     /// whole surface without one. It follows the surface when it resizes.
     pub blur: bool,
+    /// How the compositor draws the blur. Its defaults add a white frosted tint and a light
+    /// border, which a popup drawing its own glass and hairline turns off.
+    pub blur_style: PopupBlurStyle,
     /// Ask the compositor to draw a drop shadow behind the popup.
     ///
     /// The alternative to padding the surface out and drawing one, whose
@@ -182,6 +199,7 @@ impl Default for PopupSettings {
             constraint_adjustment: 0,
             grab: false,
             blur: false,
+            blur_style: PopupBlurStyle::default(),
             shadow: false,
             corner_radius: None,
             window_geometry: None,
@@ -218,6 +236,8 @@ pub struct PopupState {
     /// The KDE blur handle, for compositors that implement that protocol
     /// instead. Held for the same reason.
     pub blur: Option<OrgKdeKwinBlur>,
+    /// Sent with every blur commit: each commit replaces the whole blur state.
+    pub blur_style: PopupBlurStyle,
     /// Compositor-drawn shadow handle, held for the popup's lifetime.
     pub shadow: Option<ShadowController>,
     /// Corner radius handle, held for the popup's lifetime.
@@ -328,6 +348,7 @@ impl PopupState {
             tooltip: None,
             background_effect: None,
             blur: None,
+            blur_style: PopupBlurStyle::default(),
             shadow: None,
             corner_radius: None,
             padding: None,
@@ -366,6 +387,7 @@ impl PopupState {
             if let Some(region) = card() {
                 blur.set_region(Some(region.wl_region()));
             }
+            super::kwin_blur::send_style(blur, &self.blur_style);
             blur.commit();
         }
     }

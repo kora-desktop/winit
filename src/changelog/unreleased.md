@@ -52,6 +52,8 @@ changelog entry.
   toggle on the window's Halo (`kora_app_commands_v1` version 2).
 - On Wayland, add `WindowExtWayland::set_ime_surrounding_text()`, which tells input
   methods the text around the caret (`set_surrounding_text`), never for a password field.
+- On Wayland, add `PopupSettings::blur_style`, which sets a popup blur's radius, saturation,
+  frosted tint and border (`org_kde_kwin_blur` versions 2 and 3).
 
 ### Fixed
 
