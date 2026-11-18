@@ -729,7 +729,10 @@ impl Window {
     /// Request data from the current DnD offer for the specified MIME type.
     #[inline]
     pub fn dnd_request_data(&self, mime_type: &str) {
-        self.window_state.lock().unwrap().dnd_request_data(mime_type)
+        self.window_state.lock().unwrap().dnd_request_data(mime_type);
+        // The data waits in `pending_data` until the loop's next iteration; wake the loop so
+        // `DataReceived` is sent now instead of on the next input event.
+        self.event_loop_awakener.ping();
     }
 
     #[inline]
